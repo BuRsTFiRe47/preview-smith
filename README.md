@@ -19,7 +19,7 @@ Forge / WebUI gibi arayüzler, LoRA veya checkpoint kapak dosyası olarak `.mp4`
 - **📦 Toplu Dönüştürme** — Bir klasördeki (isterseniz alt klasörler dahil) tüm `.mp4/.mov/.webm/.mkv` dosyalarını tarar.
 - **⚡ Paralel İşlem** — Birden fazla dosyayı aynı anda dönüştürerek (ayarlanabilir işçi sayısı) süreci ciddi ölçüde hızlandırır.
 - **🎛️ Ayarlanabilir Kalite/Boyut** — Çıktı formatı (WebP / AVIF), kalite ve maksimum çözünürlük arayüzden kontrol edilir.
-- **🌐 Çift Dil** — Türkçe / İngilizce arayüz, açılır menü yerine kaydırmalı (segmented) düğmelerle anında değiştirilir.
+- **🌐 4 Dil** — Türkçe / English / 日本語 / 中文 arayüz, açılır menü yerine kaydırmalı (segmented) düğmelerle anında değiştirilir.
 - **🌗 Karanlık / Aydınlık Tema** — Varsayılan karanlık temayla açılır, tek tıkla aydınlığa geçer.
 - **💾 Kalıcı Ayarlar** — Dil, tema, pencere boyutu, en son kullanılan klasör ve tüm dönüştürme tercihleri otomatik hatırlanır.
 - **🛑 İptal Desteği** — Devam eden bir dönüştürme işlemini istediğiniz an güvenle durdurabilirsiniz.
@@ -60,7 +60,7 @@ UIs like Forge / WebUI can't display `.mp4` videos directly as a LoRA or checkpo
 - **📦 Batch Conversion** — Scans a folder (optionally including subfolders) for all `.mp4/.mov/.webm/.mkv` files.
 - **⚡ Parallel Processing** — Converts multiple files at once (configurable worker count), significantly speeding up the process.
 - **🎛️ Adjustable Quality/Size** — Output format (WebP / AVIF), quality, and maximum resolution are all controlled from the UI.
-- **🌐 Bilingual** — Turkish / English interface, switched instantly with segmented buttons instead of a dropdown menu.
+- **🌐 4 Languages** — Turkish / English / 日本語 / 中文 interface, switched instantly with segmented buttons instead of a dropdown menu.
 - **🌗 Dark / Light Theme** — Opens in dark mode by default, switches to light with a single click.
 - **💾 Persistent Settings** — Language, theme, window size, the last-used folder, and all conversion preferences are remembered automatically.
 - **🛑 Cancel Support** — Safely stop an in-progress conversion at any time.

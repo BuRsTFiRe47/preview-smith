@@ -33,6 +33,10 @@ APP_VERSION = "2.0.0"
 VIDEO_EXTENSIONS = (".mp4", ".mov", ".webm", ".mkv")
 
 ACCENT = ("#0a6ea6", "#00b4ff")
+
+# Native display names shown on the language switcher.
+LANG_CODES = ["tr", "en", "ja", "zh"]
+LANG_LABELS = {"tr": "Türkçe", "en": "English", "ja": "日本語", "zh": "中文"}
 LOG_BG = ("#f2f2f2", "#121212")
 CARD_BG = ("#e8e8e8", "#2b2b2b")
 
@@ -91,9 +95,9 @@ class PreviewSmithApp(ctk.CTk):
         self.theme_seg.set(t("theme_dark", self.lang) if self.theme == "dark" else t("theme_light", self.lang))
         self.theme_seg.pack(side="right", padx=(10, 0))
 
-        lang_values = [t("lang_tr", self.lang), t("lang_en", self.lang)]
+        lang_values = [LANG_LABELS[c] for c in LANG_CODES]
         self.lang_seg = ctk.CTkSegmentedButton(top_bar, values=lang_values, command=self._on_lang_change)
-        self.lang_seg.set(t("lang_tr", self.lang) if self.lang == "tr" else t("lang_en", self.lang))
+        self.lang_seg.set(LANG_LABELS.get(self.lang, LANG_LABELS["tr"]))
         self.lang_seg.pack(side="right")
 
         # Folder picker
@@ -171,7 +175,10 @@ class PreviewSmithApp(ctk.CTk):
             pass
 
     def _on_lang_change(self, value):
-        self.lang = "tr" if value == t("lang_tr", self.lang) else "en"
+        for code, label in LANG_LABELS.items():
+            if label == value:
+                self.lang = code
+                break
         self.arayuz_ciz()
 
     def _on_theme_change(self, value):

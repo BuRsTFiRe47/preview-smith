@@ -33,21 +33,27 @@ from lang import t
 APP_VERSION = "2.0.0"
 VIDEO_EXTENSIONS = (".mp4", ".mov", ".webm", ".mkv")
 
-# Theme-aware color tuples: (light_mode, dark_mode) - matches the
-# dark violet / near-black palette (with a purple-to-pink accent)
-# used across the LoRA Librarian companion app.
-BG_MAIN = ("#f4f2fa", "#0e0d15")
-BG_HEADER = ("#ffffff", "#131220")
-CARD_BG = ("#ffffff", "#17161f")
-BORDER = ("#e2ddf0", "#2a2838")
-LOG_BG = ("#efecf8", "#100f18")
-TEXT_MUTED = ("#6b6880", "#9c99ab")
+# Theme-aware color tuples: (light_mode, dark_mode) - a clean black/blue
+# palette (dark mode is near-black with a blue tint), matching the
+# companion LoRA Librarian app.
+BG_MAIN = ("#f1f4f9", "#05070c")
+BG_HEADER = ("#ffffff", "#0a0e16")
+CARD_BG = ("#ffffff", "#0d1119")
+BORDER = ("#dde3ee", "#1c2432")
+LOG_BG = ("#eaeef5", "#04060a")
+TEXT_MUTED = ("#5c6b81", "#7d8aa0")
+SIDEBAR_TEXT = ("#31435c", "#a8b3c4")
+SIDEBAR_ITEM_HOVER = ("#dbe3f1", "#131a26")
 
-ACCENT = "#8b5cf6"
-ACCENT_HOVER = "#7c4ee8"
-GRADIENT_STOPS = ["#4f46e5", "#9333ea", "#ec4899"]
+# A light "highlight" border on buttons approximates a raised/puffy,
+# subtly shadowed look, since CTk has no real drop-shadow support.
+BTN_BORDER = ("#ffffff", "#2a3547")
 
-CORNER_BTN = 10
+ACCENT = "#2f7bff"
+ACCENT_HOVER = "#2569e0"
+GRADIENT_STOPS = ["#050814", "#1e3a8a", "#38bdf8"]
+
+CORNER_BTN = 14
 CORNER_CARD = 14
 CORNER_INPUT = 8
 
@@ -110,6 +116,7 @@ class PreviewSmithApp(ctk.CTk):
         self.cancel_event = threading.Event()
 
         self.folder_path = ctk.StringVar()
+        self.klasor_gecmisi = []
         self.scan_subfolders = ctk.BooleanVar(value=False)
         self.delete_source = ctk.BooleanVar(value=True)
         self.output_format = ctk.StringVar(value="webp")
@@ -172,7 +179,8 @@ class PreviewSmithApp(ctk.CTk):
         entry_row.grid(row=1, column=0, sticky="ew", padx=14, pady=(8, 14))
         folder_frame.grid_columnconfigure(0, weight=1)
         ctk.CTkEntry(entry_row, textvariable=self.folder_path, width=480, corner_radius=CORNER_INPUT).pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(entry_row, text=t("browse", self.lang), width=90, corner_radius=CORNER_BTN, fg_color=ACCENT, hover_color=ACCENT_HOVER, command=self.browse_folder).pack(side="left", padx=(10, 0))
+        ctk.CTkButton(entry_row, text="🕘", width=36, height=34, corner_radius=CORNER_BTN, fg_color="transparent", border_width=1, border_color=BORDER, text_color=SIDEBAR_TEXT, hover_color=SIDEBAR_ITEM_HOVER, command=self.gecmis_penceresi_ac).pack(side="left", padx=(10, 0))
+        ctk.CTkButton(entry_row, text=t("browse", self.lang), width=90, height=34, corner_radius=CORNER_BTN, fg_color=ACCENT, hover_color=ACCENT_HOVER, border_width=2, border_color=BTN_BORDER, command=self.browse_folder).pack(side="left", padx=(10, 0))
 
         # Options
         opts_frame = ctk.CTkFrame(body, fg_color=CARD_BG, corner_radius=CORNER_CARD, border_width=1, border_color=BORDER)
@@ -180,8 +188,8 @@ class PreviewSmithApp(ctk.CTk):
 
         switches_row = ctk.CTkFrame(opts_frame, fg_color="transparent")
         switches_row.pack(fill="x", padx=14, pady=14)
-        ctk.CTkSwitch(switches_row, text=t("switch_subfolders", self.lang), variable=self.scan_subfolders, progress_color=ACCENT).pack(side="left")
-        ctk.CTkSwitch(switches_row, text=t("switch_delete_source", self.lang), variable=self.delete_source, progress_color=ACCENT).pack(side="left", padx=(30, 0))
+        ctk.CTkSwitch(switches_row, text=t("switch_subfolders", self.lang), variable=self.scan_subfolders, progress_color=ACCENT).pack(anchor="w", pady=(0, 8))
+        ctk.CTkSwitch(switches_row, text=t("switch_delete_source", self.lang), variable=self.delete_source, progress_color=ACCENT).pack(anchor="w")
 
         grid_row = ctk.CTkFrame(opts_frame, fg_color="transparent")
         grid_row.pack(fill="x", padx=14, pady=(0, 14))
@@ -217,7 +225,7 @@ class PreviewSmithApp(ctk.CTk):
         w_lbl.pack(side="left", padx=(10, 0))
 
         # Start / cancel button
-        self.btn_start = ctk.CTkButton(body, text=t("btn_start", self.lang), corner_radius=CORNER_BTN, height=40, fg_color=ACCENT, hover_color=ACCENT_HOVER,
+        self.btn_start = ctk.CTkButton(body, text=t("btn_start", self.lang), corner_radius=CORNER_BTN, height=44, fg_color=ACCENT, hover_color=ACCENT_HOVER, border_width=2, border_color=BTN_BORDER,
                                         command=self.start_conversion_thread)
         self.btn_start.pack(fill="x", pady=(0, 10))
 
@@ -225,7 +233,7 @@ class PreviewSmithApp(ctk.CTk):
         log_frame = ctk.CTkFrame(body, fg_color=CARD_BG, corner_radius=CORNER_CARD, border_width=1, border_color=BORDER)
         log_frame.pack(fill="both", expand=True)
 
-        self.progress_bar = ctk.CTkProgressBar(log_frame, progress_color=ACCENT, corner_radius=CORNER_INPUT)
+        self.progress_bar = ctk.CTkProgressBar(log_frame, progress_color=ACCENT, corner_radius=CORNER_INPUT, height=16)
         self.progress_bar.pack(fill="x", padx=14, pady=(14, 8))
         self.progress_bar.set(0)
 
@@ -250,6 +258,57 @@ class PreviewSmithApp(ctk.CTk):
         folder = filedialog.askdirectory(title=t("browse_dialog_title", self.lang))
         if folder:
             self.folder_path.set(folder)
+            self._gecmise_ekle(folder)
+
+    def _gecmise_ekle(self, yol):
+        if not yol:
+            return
+        if yol in self.klasor_gecmisi:
+            self.klasor_gecmisi.remove(yol)
+        self.klasor_gecmisi.insert(0, yol)
+        self.klasor_gecmisi = self.klasor_gecmisi[:12]
+
+    def gecmis_penceresi_ac(self):
+        pencere = ctk.CTkToplevel(self)
+        pencere.title(t("history_window_title", self.lang))
+        pencere.geometry("520x380")
+        pencere.configure(fg_color=BG_MAIN)
+        pencere.transient(self)
+        pencere.attributes("-topmost", True)
+        self._gecmis_pencere_ciz(pencere)
+
+    def _gecmis_pencere_ciz(self, pencere):
+        for w in pencere.winfo_children():
+            w.destroy()
+
+        liste_frame = ctk.CTkScrollableFrame(pencere, fg_color="transparent")
+        liste_frame.pack(fill="both", expand=True, padx=12, pady=12)
+
+        if not self.klasor_gecmisi:
+            ctk.CTkLabel(liste_frame, text=t("history_empty", self.lang), text_color=TEXT_MUTED).pack(pady=30)
+            return
+
+        for yol in self.klasor_gecmisi:
+            satir = ctk.CTkFrame(liste_frame, fg_color=CARD_BG, corner_radius=CORNER_INPUT, border_width=1, border_color=BORDER)
+            satir.pack(fill="x", pady=4)
+            ctk.CTkButton(
+                satir, text=yol, anchor="w", fg_color="transparent", hover_color=SIDEBAR_ITEM_HOVER, corner_radius=CORNER_INPUT,
+                command=lambda y=yol, p=pencere: self._gecmisten_sec(y, p),
+            ).pack(side="left", fill="x", expand=True, padx=(6, 0), pady=4)
+            ctk.CTkButton(
+                satir, text="✕", width=32, corner_radius=CORNER_INPUT, fg_color="#b5261a", hover_color="#d63424",
+                command=lambda y=yol, p=pencere: self._gecmisten_sil(y, p),
+            ).pack(side="right", padx=6, pady=4)
+
+    def _gecmisten_sec(self, yol, pencere):
+        self.folder_path.set(yol)
+        self._gecmise_ekle(yol)
+        pencere.destroy()
+
+    def _gecmisten_sil(self, yol, pencere):
+        if yol in self.klasor_gecmisi:
+            self.klasor_gecmisi.remove(yol)
+        self._gecmis_pencere_ciz(pencere)
 
     # ------------------------------------------------------------------
     # Settings persistence
@@ -264,6 +323,7 @@ class PreviewSmithApp(ctk.CTk):
             self.theme = d.get("theme", "dark")
             self._pending_geometry = d.get("geometry", "750x680")
             self.folder_path.set(d.get("folder", ""))
+            self.klasor_gecmisi = d.get("recent_folders", [])
             self.scan_subfolders.set(d.get("scan_subfolders", False))
             self.delete_source.set(d.get("delete_source", True))
             self.output_format.set(d.get("output_format", "webp"))
@@ -279,6 +339,7 @@ class PreviewSmithApp(ctk.CTk):
             "theme": self.theme,
             "geometry": self.geometry(),
             "folder": self.folder_path.get(),
+            "recent_folders": self.klasor_gecmisi,
             "scan_subfolders": self.scan_subfolders.get(),
             "delete_source": self.delete_source.get(),
             "output_format": self.output_format.get(),

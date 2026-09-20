@@ -24,6 +24,8 @@ TRANSLATIONS = {
 
     "target_folder_label": {"tr": "Hedef Klasör:", "en": "Target Folder:", "ja": "対象フォルダ：", "zh": "目标文件夹："},
     "browse": {"tr": "Gözat", "en": "Browse", "ja": "参照", "zh": "浏览"},
+    "history_window_title": {"tr": "Klasör Geçmişi", "en": "Folder History", "ja": "フォルダ履歴", "zh": "文件夹历史记录"},
+    "history_empty": {"tr": "Henüz geçmiş yok.", "en": "No history yet.", "ja": "まだ履歴はありません。", "zh": "暂无历史记录。"},
 
     "switch_subfolders": {"tr": "Alt klasörleri de tara", "en": "Also scan subfolders", "ja": "サブフォルダもスキャンする", "zh": "同时扫描子文件夹"},
     "switch_delete_source": {"tr": "Başarılı dönüşümde orijinal dosyayı sil", "en": "Delete original file after a successful conversion", "ja": "変換成功後に元のファイルを削除する", "zh": "转换成功后删除原始文件"},

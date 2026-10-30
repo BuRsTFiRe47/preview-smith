@@ -5,501 +5,470 @@ Preview Smith
 Stable Diffusion WebUI / Forge gibi arayüzlerin doğrudan gösteremediği
 MP4/MOV/WEBM önizleme videolarını, arayüzlerin kapak resmi gibi
 algıladığı hareketli WebP/AVIF dosyalarına toplu olarak dönüştüren
-modern, çift dilli masaüstü uygulaması.
+modern, çift dilli masaüstü uygulaması. Windows / macOS / Linux
+(PySide6 / Qt 6).
 
 A modern, bilingual desktop app that batch-converts MP4/MOV/WEBM
 preview videos (which UIs like Stable Diffusion WebUI / Forge can't
 show directly) into animated WebP/AVIF files that those UIs treat as
-regular cover images.
+regular cover images. Windows / macOS / Linux (PySide6 / Qt 6).
 
 License: MIT
 """
 
-import os
 import sys
-import json
-import shutil
-import subprocess
-import threading
-from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import customtkinter as ctk
-import tkinter as tk
-from tkinter import filedialog, messagebox
+from PySide6.QtCore import Qt, QObject, Signal, QSize, QRectF
+from PySide6.QtGui import QColor, QPainter, QLinearGradient, QBrush
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QLabel, QLineEdit, QPushButton, QCheckBox, QSlider, QPlainTextEdit,
+    QProgressBar, QScrollArea, QFrame, QFileDialog, QDialog, QButtonGroup,
+)
 
 from lang import t
-
-APP_VERSION = "2.0.0"
-VIDEO_EXTENSIONS = (".mp4", ".mov", ".webm", ".mkv")
-
-# Theme-aware color tuples: (light_mode, dark_mode) - a clean black/blue
-# palette (dark mode is near-black with a blue tint), matching the
-# companion LoRA Librarian app.
-BG_MAIN = ("#f1f4f9", "#05070c")
-BG_HEADER = ("#ffffff", "#0a0e16")
-CARD_BG = ("#ffffff", "#0d1119")
-BORDER = ("#dde3ee", "#1c2432")
-LOG_BG = ("#eaeef5", "#04060a")
-TEXT_MUTED = ("#5c6b81", "#7d8aa0")
-SIDEBAR_TEXT = ("#31435c", "#a8b3c4")
-SIDEBAR_ITEM_HOVER = ("#dbe3f1", "#131a26")
-
-# A light "highlight" border on buttons approximates a raised/puffy,
-# subtly shadowed look, since CTk has no real drop-shadow support.
-BTN_BORDER = ("#ffffff", "#2a3547")
+from engine import Engine, APP_VERSION, LANG_CODES, LANG_LABELS, ffmpeg_available
 
 ACCENT = "#2f7bff"
 ACCENT_HOVER = "#2569e0"
 GRADIENT_STOPS = ["#050814", "#1e3a8a", "#38bdf8"]
 
-CORNER_BTN = 14
-CORNER_CARD = 14
-CORNER_INPUT = 8
-
-# Native display names shown on the language switcher.
-LANG_CODES = ["tr", "en", "ja", "zh"]
-LANG_LABELS = {"tr": "Türkçe", "en": "English", "ja": "日本語", "zh": "中文"}
-
-
-def _hex_to_rgb(h):
-    h = h.lstrip("#")
-    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
-
-
-def _rgb_to_hex(rgb):
-    return "#%02x%02x%02x" % rgb
+PALETTES = {
+    "dark": {
+        "bg": "#05070c", "header": "#0a0e16", "card": "#0d1119", "hover": "#131a26",
+        "text": "#e6ebf5", "side_text": "#a8b3c4", "border": "#1c2432", "log_bg": "#04060a",
+        "muted": "#7d8aa0", "input": "#0a0e16", "btn_border": "#2a3547",
+    },
+    "light": {
+        "bg": "#f1f4f9", "header": "#ffffff", "card": "#ffffff", "hover": "#dbe3f1",
+        "text": "#16202f", "side_text": "#31435c", "border": "#dde3ee", "log_bg": "#eaeef5",
+        "muted": "#5c6b81", "input": "#ffffff", "btn_border": "#ffffff",
+    },
+}
 
 
-def _interp_color(stops, t_frac):
-    n = len(stops) - 1
-    seg = min(int(t_frac * n), n - 1)
-    local_t = (t_frac * n) - seg
-    c1, c2 = _hex_to_rgb(stops[seg]), _hex_to_rgb(stops[seg + 1])
-    mixed = tuple(int(c1[i] + (c2[i] - c1[i]) * local_t) for i in range(3))
-    return _rgb_to_hex(mixed)
+def build_qss(theme):
+    p = PALETTES.get(theme, PALETTES["dark"])
+    return f"""
+    QWidget {{ color: {p['text']}; font-size: 13px; }}
+    QMainWindow, QWidget#root {{ background: {p['bg']}; }}
+    QScrollArea {{ border: none; background: transparent; }}
+    QScrollArea > QWidget > QWidget {{ background: transparent; }}
+    QWidget#page {{ background: transparent; }}
+    QFrame#header {{ background: {p['header']}; border: none; }}
+    QFrame#card {{ background: {p['card']}; border: 1px solid {p['border']}; border-radius: 14px; }}
+    QFrame#card QLabel, QLabel {{ background: transparent; }}
+    QLabel#title {{ font-size: 18px; font-weight: 700; }}
+    QLabel#version {{ color: {p['muted']}; font-size: 11px; }}
+    QLabel#bold {{ font-weight: 700; }}
+    QLabel#value {{ color: {ACCENT}; font-weight: 700; }}
+
+    QLineEdit, QPlainTextEdit {{
+        background: {p['input']}; border: 1px solid {p['border']}; border-radius: 8px; padding: 7px 10px;
+        selection-background-color: {ACCENT}; selection-color: white;
+    }}
+    QLineEdit:focus, QPlainTextEdit:focus {{ border: 1px solid {ACCENT}; }}
+    QPlainTextEdit#log {{
+        background: {p['log_bg']}; color: {ACCENT}; font-family: Consolas, Menlo, "DejaVu Sans Mono", monospace;
+        font-size: 12px;
+    }}
+
+    QPushButton {{
+        background: transparent; border: 1px solid {p['border']}; border-radius: 12px; padding: 7px 14px;
+        color: {p['side_text']};
+    }}
+    QPushButton:hover {{ background: {p['hover']}; }}
+    QPushButton#seg, QPushButton#segL, QPushButton#segR {{ border: 1px solid {p['border']}; border-radius: 0; padding: 6px 12px; color: {p['side_text']}; margin-left: -1px; }}
+    QPushButton#seg:checked, QPushButton#segL:checked, QPushButton#segR:checked {{ background: {ACCENT}; color: white; border: 1px solid {ACCENT}; }}
+    QPushButton#segL {{ border-top-left-radius: 12px; border-bottom-left-radius: 12px; margin-left: 0; }}
+    QPushButton#segR {{ border-top-right-radius: 12px; border-bottom-right-radius: 12px; }}
+    QPushButton#accent {{ background: {ACCENT}; color: white; border: 2px solid {p['btn_border']}; font-weight: 600; }}
+    QPushButton#accent:hover {{ background: {ACCENT_HOVER}; }}
+    QPushButton#start {{
+        background: {ACCENT}; color: white; font-size: 14px; font-weight: 700; border: 2px solid {p['btn_border']};
+        border-radius: 14px; padding: 13px 20px;
+    }}
+    QPushButton#start:hover {{ background: {ACCENT_HOVER}; }}
+    QPushButton#cancel {{
+        background: #b5261a; color: white; font-size: 14px; font-weight: 700; border: 2px solid {p['btn_border']};
+        border-radius: 14px; padding: 13px 20px;
+    }}
+    QPushButton#cancel:hover {{ background: #d63424; }}
+    QPushButton#danger {{ background: #b5261a; color: white; border: none; padding: 5px 10px; }}
+    QPushButton#danger:hover {{ background: #d63424; }}
+    QPushButton#histitem {{ text-align: left; border: none; }}
+
+    QProgressBar {{ background: {p['log_bg']}; border: 1px solid {p['border']}; border-radius: 8px; color: transparent; }}
+    QProgressBar::chunk {{ background: {ACCENT}; border-radius: 7px; }}
+    QSlider::groove:horizontal {{ height: 6px; background: {p['border']}; border-radius: 3px; }}
+    QSlider::sub-page:horizontal {{ background: {ACCENT}; border-radius: 3px; }}
+    QSlider::handle:horizontal {{ background: {ACCENT}; width: 16px; height: 16px; margin: -6px 0; border-radius: 8px; }}
+    QScrollBar:vertical {{ background: transparent; width: 10px; margin: 0; }}
+    QScrollBar::handle:vertical {{ background: {p['border']}; border-radius: 5px; min-height: 30px; }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+    QDialog {{ background: {p['bg']}; }}
+    """
 
 
-def draw_gradient_bar(canvas, width, height, stops=None):
-    """Paint a thin horizontal gradient strip on a tk.Canvas."""
-    stops = stops or GRADIENT_STOPS
-    canvas.delete("all")
-    steps = max(1, width // 2)
-    for i in range(steps):
-        frac = i / max(1, steps - 1)
-        color = _interp_color(stops, frac)
-        x = int(i * width / steps)
-        x2 = int((i + 1) * width / steps) + 1
-        canvas.create_rectangle(x, 0, x2, height, fill=color, outline=color)
-
-
-def app_dir():
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
-
-
-SETTINGS_PATH = os.path.join(app_dir(), "ayarlar.json")
-
-
-def ffmpeg_available():
-    return shutil.which("ffmpeg") is not None
-
-
-class PreviewSmithApp(ctk.CTk):
+class GradientStrip(QWidget):
     def __init__(self):
         super().__init__()
+        self.setFixedHeight(4)
 
-        self.lang = "tr"
-        self.theme = "dark"
-        self.is_running = False
-        self.cancel_event = threading.Event()
+    def paintEvent(self, _e):
+        g = QLinearGradient(0, 0, self.width(), 0)
+        n = len(GRADIENT_STOPS) - 1
+        for i, c in enumerate(GRADIENT_STOPS):
+            g.setColorAt(i / n, QColor(c))
+        QPainter(self).fillRect(self.rect(), QBrush(g))
 
-        self.folder_path = ctk.StringVar()
-        self.klasor_gecmisi = []
-        self.scan_subfolders = ctk.BooleanVar(value=False)
-        self.delete_source = ctk.BooleanVar(value=True)
-        self.output_format = ctk.StringVar(value="webp")
-        self.quality = ctk.IntVar(value=60)
-        self.max_size = ctk.IntVar(value=384)
-        self.workers = ctk.IntVar(value=3)
 
-        self.ayarlari_yukle()
-        ctk.set_appearance_mode(self.theme)
-        self.geometry(getattr(self, "_pending_geometry", "750x680"))
+class Switch(QCheckBox):
+    W, H = 40, 22
 
-        self.arayuz_ciz()
-        self.protocol("WM_DELETE_WINDOW", self.kapatirken_kaydet)
+    def __init__(self, text="", theme_getter=lambda: "dark"):
+        super().__init__(text)
+        self._theme = theme_getter
+        self.setCursor(Qt.PointingHandCursor)
+        self.setMinimumHeight(30)
 
-    # ------------------------------------------------------------------
-    # UI
-    # ------------------------------------------------------------------
-    def arayuz_ciz(self):
-        for w in self.winfo_children():
-            w.destroy()
+    def sizeHint(self):
+        s = super().sizeHint()
+        return QSize(self.W + 12 + self.fontMetrics().horizontalAdvance(self.text()) + 4, max(30, s.height()))
 
-        self.title(t("app_title", self.lang))
-        self.configure(fg_color=BG_MAIN)
+    def hitButton(self, pos):
+        return self.rect().contains(pos)
 
-        # Decorative gradient accent strip (indigo -> violet -> pink)
-        gradient_canvas = tk.Canvas(self, height=4, highlightthickness=0, bd=0)
-        gradient_canvas.pack(fill="x", side="top")
-        gradient_canvas.bind("<Configure>", lambda e: draw_gradient_bar(gradient_canvas, e.width, e.height))
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        y = (self.height() - self.H) / 2
+        track = QRectF(1, y, self.W, self.H)
+        on = self.isChecked()
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(ACCENT) if on else QColor(120, 130, 150, 120))
+        p.drawRoundedRect(track, self.H / 2, self.H / 2)
+        d = self.H - 6
+        x = track.right() - d - 3 if on else track.left() + 3
+        p.setBrush(QColor("white"))
+        p.drawEllipse(QRectF(x, y + 3, d, d))
+        p.setPen(QColor(PALETTES[self._theme()]["text"]))
+        p.drawText(QRectF(self.W + 12, 0, self.width() - self.W - 12, self.height()),
+                   Qt.AlignVCenter | Qt.AlignLeft, self.text())
 
-        # Header
-        header = ctk.CTkFrame(self, fg_color=BG_HEADER, corner_radius=0)
-        header.pack(fill="x", side="top")
 
-        title_frame = ctk.CTkFrame(header, fg_color="transparent")
-        title_frame.pack(side="left", padx=20, pady=12)
-        ctk.CTkLabel(title_frame, text="Preview Smith", font=("Segoe UI", 16, "bold")).pack(anchor="w")
-        ctk.CTkLabel(title_frame, text=f"v{APP_VERSION}", font=("Segoe UI", 10), text_color=TEXT_MUTED).pack(anchor="w")
+class Bridge(QObject):
+    log = Signal(str)
+    progress = Signal(float)
+    running = Signal(bool)
 
-        controls_frame = ctk.CTkFrame(header, fg_color="transparent")
-        controls_frame.pack(side="right", padx=20, pady=12)
 
-        theme_values = [t("theme_dark", self.lang), t("theme_light", self.lang)]
-        self.theme_seg = ctk.CTkSegmentedButton(controls_frame, values=theme_values, command=self._on_theme_change, corner_radius=CORNER_BTN, selected_color=ACCENT, selected_hover_color=ACCENT_HOVER)
-        self.theme_seg.set(t("theme_dark", self.lang) if self.theme == "dark" else t("theme_light", self.lang))
-        self.theme_seg.pack(side="right", padx=(10, 0))
+class HistoryDialog(QDialog):
+    def __init__(self, win, edit):
+        super().__init__(win)
+        self.win, self.edit = win, edit
+        self.setWindowTitle(t("history_window_title", win.eng.lang))
+        self.resize(560, 400)
+        self.outer = QVBoxLayout(self)
+        self.outer.setContentsMargins(14, 14, 14, 14)
+        self._fill()
 
-        lang_values = [LANG_LABELS[c] for c in LANG_CODES]
-        self.lang_seg = ctk.CTkSegmentedButton(controls_frame, values=lang_values, command=self._on_lang_change, corner_radius=CORNER_BTN, selected_color=ACCENT, selected_hover_color=ACCENT_HOVER)
-        self.lang_seg.set(LANG_LABELS.get(self.lang, LANG_LABELS["tr"]))
-        self.lang_seg.pack(side="right")
+    def _fill(self):
+        while self.outer.count():
+            it = self.outer.takeAt(0)
+            if it.widget():
+                it.widget().deleteLater()
+        eng = self.win.eng
+        if not eng.klasor_gecmisi:
+            lbl = QLabel(t("history_empty", eng.lang))
+            lbl.setAlignment(Qt.AlignCenter)
+            self.outer.addWidget(lbl)
+            return
+        for yol in list(eng.klasor_gecmisi):
+            row = QFrame()
+            row.setObjectName("card")
+            h = QHBoxLayout(row)
+            h.setContentsMargins(6, 4, 6, 4)
+            b = QPushButton(yol)
+            b.setObjectName("histitem")
+            b.setCursor(Qt.PointingHandCursor)
+            b.clicked.connect(lambda _=False, y=yol: self._pick(y))
+            d = QPushButton("✕")
+            d.setObjectName("danger")
+            d.clicked.connect(lambda _=False, y=yol: self._remove(y))
+            h.addWidget(b, 1)
+            h.addWidget(d)
+            self.outer.addWidget(row)
+        self.outer.addStretch(1)
 
-        body = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        body.pack(fill="both", expand=True, padx=16, pady=(14, 8))
+    def _pick(self, yol):
+        self.edit.setText(yol)
+        self.win.eng._gecmise_ekle(yol)
+        self.accept()
 
-        # Folder picker
-        folder_frame = ctk.CTkFrame(body, fg_color=CARD_BG, corner_radius=CORNER_CARD, border_width=1, border_color=BORDER)
-        folder_frame.pack(fill="x", pady=(0, 10))
-        ctk.CTkLabel(folder_frame, text=t("target_folder_label", self.lang), font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w", padx=14, pady=(14, 0))
-        entry_row = ctk.CTkFrame(folder_frame, fg_color="transparent")
-        entry_row.grid(row=1, column=0, sticky="ew", padx=14, pady=(8, 14))
-        folder_frame.grid_columnconfigure(0, weight=1)
-        ctk.CTkEntry(entry_row, textvariable=self.folder_path, width=480, corner_radius=CORNER_INPUT).pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(entry_row, text="🕘", width=36, height=34, corner_radius=CORNER_BTN, fg_color="transparent", border_width=1, border_color=BORDER, text_color=SIDEBAR_TEXT, hover_color=SIDEBAR_ITEM_HOVER, command=self.gecmis_penceresi_ac).pack(side="left", padx=(10, 0))
-        ctk.CTkButton(entry_row, text=t("browse", self.lang), width=90, height=34, corner_radius=CORNER_BTN, fg_color=ACCENT, hover_color=ACCENT_HOVER, border_width=2, border_color=BTN_BORDER, command=self.browse_folder).pack(side="left", padx=(10, 0))
+    def _remove(self, yol):
+        if yol in self.win.eng.klasor_gecmisi:
+            self.win.eng.klasor_gecmisi.remove(yol)
+        self._fill()
 
-        # Options
-        opts_frame = ctk.CTkFrame(body, fg_color=CARD_BG, corner_radius=CORNER_CARD, border_width=1, border_color=BORDER)
-        opts_frame.pack(fill="x", pady=(0, 10))
 
-        switches_row = ctk.CTkFrame(opts_frame, fg_color="transparent")
-        switches_row.pack(fill="x", padx=14, pady=14)
-        ctk.CTkSwitch(switches_row, text=t("switch_subfolders", self.lang), variable=self.scan_subfolders, progress_color=ACCENT).pack(anchor="w", pady=(0, 8))
-        ctk.CTkSwitch(switches_row, text=t("switch_delete_source", self.lang), variable=self.delete_source, progress_color=ACCENT).pack(anchor="w")
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.eng = Engine()
+        self.bridge = Bridge()
+        self.eng.on_log = self.bridge.log.emit
+        self.eng.on_progress = self.bridge.progress.emit
+        self.eng.on_running = self.bridge.running.emit
+        self.bridge.log.connect(self._append_log)
+        self.bridge.progress.connect(self._set_progress)
+        self.bridge.running.connect(self._set_running)
 
-        grid_row = ctk.CTkFrame(opts_frame, fg_color="transparent")
-        grid_row.pack(fill="x", padx=14, pady=(0, 14))
+        self._log_cache = ""
+        try:
+            w, h = [int(x) for x in str(self.eng._pending_geometry).lower().split("+")[0].split("x")]
+            self.resize(max(640, w), max(560, h))
+        except Exception:
+            self.resize(750, 720)
 
-        ctk.CTkLabel(grid_row, text=t("output_format_label", self.lang)).grid(row=0, column=0, sticky="w", padx=(0, 10), pady=5)
-        fmt_seg = ctk.CTkSegmentedButton(grid_row, values=["WebP", "AVIF"], command=lambda v: self.output_format.set(v.lower()),
-                                          width=140, corner_radius=CORNER_BTN, selected_color=ACCENT, selected_hover_color=ACCENT_HOVER)
-        fmt_seg.grid(row=0, column=1, sticky="w", pady=5)
-        fmt_seg.set("WebP" if self.output_format.get() == "webp" else "AVIF")
+        self.apply_theme()
+        self.build_ui()
 
-        ctk.CTkLabel(grid_row, text=t("quality_label", self.lang)).grid(row=1, column=0, sticky="w", padx=(0, 10), pady=5)
-        q_frame = ctk.CTkFrame(grid_row, fg_color="transparent")
-        q_frame.grid(row=1, column=1, sticky="w", pady=5)
-        q_lbl = ctk.CTkLabel(q_frame, text=str(self.quality.get()), width=30)
-        ctk.CTkSlider(q_frame, from_=10, to=100, number_of_steps=90, variable=self.quality, progress_color=ACCENT, button_color=ACCENT, button_hover_color=ACCENT_HOVER,
-                      command=lambda v: q_lbl.configure(text=str(int(v)))).pack(side="left")
-        q_lbl.pack(side="left", padx=(10, 0))
+    def apply_theme(self):
+        QApplication.instance().setStyleSheet(build_qss(self.eng.theme))
 
-        ctk.CTkLabel(grid_row, text=t("max_size_label", self.lang)).grid(row=2, column=0, sticky="w", padx=(0, 10), pady=5)
-        s_frame = ctk.CTkFrame(grid_row, fg_color="transparent")
-        s_frame.grid(row=2, column=1, sticky="w", pady=5)
-        s_lbl = ctk.CTkLabel(s_frame, text=str(self.max_size.get()), width=30)
-        ctk.CTkSlider(s_frame, from_=128, to=768, number_of_steps=40, variable=self.max_size, progress_color=ACCENT, button_color=ACCENT, button_hover_color=ACCENT_HOVER,
-                      command=lambda v: s_lbl.configure(text=str(int(v)))).pack(side="left")
-        s_lbl.pack(side="left", padx=(10, 0))
+    # ------------------------------------------------------------ UI
+    def build_ui(self):
+        lang = self.eng.lang
+        self.setWindowTitle(t("app_title", lang))
+        root = QWidget()
+        root.setObjectName("root")
+        self.setCentralWidget(root)
+        outer = QVBoxLayout(root)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        outer.addWidget(GradientStrip())
+        outer.addWidget(self._header())
 
-        ctk.CTkLabel(grid_row, text=t("workers_label", self.lang)).grid(row=3, column=0, sticky="w", padx=(0, 10), pady=5)
-        w_frame = ctk.CTkFrame(grid_row, fg_color="transparent")
-        w_frame.grid(row=3, column=1, sticky="w", pady=5)
-        w_lbl = ctk.CTkLabel(w_frame, text=str(self.workers.get()), width=30)
-        ctk.CTkSlider(w_frame, from_=1, to=8, number_of_steps=7, variable=self.workers, progress_color=ACCENT, button_color=ACCENT, button_hover_color=ACCENT_HOVER,
-                      command=lambda v: w_lbl.configure(text=str(int(v)))).pack(side="left")
-        w_lbl.pack(side="left", padx=(10, 0))
+        page = QWidget()
+        page.setObjectName("page")
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(0, 0, 8, 0)
+        lay.setSpacing(10)
 
-        # Start / cancel button
-        self.btn_start = ctk.CTkButton(body, text=t("btn_start", self.lang), corner_radius=CORNER_BTN, height=44, fg_color=ACCENT, hover_color=ACCENT_HOVER, border_width=2, border_color=BTN_BORDER,
-                                        command=self.start_conversion_thread)
-        self.btn_start.pack(fill="x", pady=(0, 10))
+        # folder card
+        card = QFrame()
+        card.setObjectName("card")
+        g = QGridLayout(card)
+        g.setContentsMargins(14, 12, 14, 14)
+        g.setColumnStretch(0, 1)
+        lbl = QLabel(t("target_folder_label", lang))
+        lbl.setObjectName("bold")
+        g.addWidget(lbl, 0, 0, 1, 3)
+        self.folder_edit = QLineEdit(self.eng.folder_path.get())
+        self.folder_edit.textChanged.connect(self.eng.folder_path.set)
+        hist = QPushButton("🕘")
+        hist.setFixedWidth(40)
+        hist.setCursor(Qt.PointingHandCursor)
+        hist.clicked.connect(lambda: HistoryDialog(self, self.folder_edit).exec())
+        browse = QPushButton(t("browse", lang))
+        browse.setObjectName("accent")
+        browse.setCursor(Qt.PointingHandCursor)
+        browse.clicked.connect(self._browse)
+        g.addWidget(self.folder_edit, 1, 0)
+        g.addWidget(hist, 1, 1)
+        g.addWidget(browse, 1, 2)
+        lay.addWidget(card)
 
-        # Log / process panel
-        log_frame = ctk.CTkFrame(body, fg_color=CARD_BG, corner_radius=CORNER_CARD, border_width=1, border_color=BORDER)
-        log_frame.pack(fill="both", expand=True)
+        # options card
+        opts = QFrame()
+        opts.setObjectName("card")
+        ov = QVBoxLayout(opts)
+        ov.setContentsMargins(14, 12, 14, 14)
+        ov.addWidget(self._switch(t("switch_subfolders", lang), self.eng.scan_subfolders))
+        ov.addWidget(self._switch(t("switch_delete_source", lang), self.eng.delete_source))
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(14)
+        grid.setVerticalSpacing(8)
+        grid.addWidget(QLabel(t("output_format_label", lang)), 0, 0)
+        grid.addWidget(self._format_seg(), 0, 1, Qt.AlignLeft)
+        self._slider_row(grid, 1, t("quality_label", lang), self.eng.quality, 10, 100)
+        self._slider_row(grid, 2, t("max_size_label", lang), self.eng.max_size, 128, 768, step=16)
+        self._slider_row(grid, 3, t("workers_label", lang), self.eng.workers, 1, 8)
+        grid.setColumnStretch(1, 1)
+        ov.addSpacing(6)
+        ov.addLayout(grid)
+        lay.addWidget(opts)
 
-        self.progress_bar = ctk.CTkProgressBar(log_frame, progress_color=ACCENT, corner_radius=CORNER_INPUT, height=16)
-        self.progress_bar.pack(fill="x", padx=14, pady=(14, 8))
-        self.progress_bar.set(0)
+        self.btn_start = QPushButton(t("btn_start", lang))
+        self.btn_start.setObjectName("start")
+        self.btn_start.setCursor(Qt.PointingHandCursor)
+        self.btn_start.clicked.connect(self.eng.start_conversion_thread)
+        lay.addWidget(self.btn_start)
 
-        self.log_area = ctk.CTkTextbox(log_frame, state="disabled", font=("Consolas", 11), text_color=ACCENT, fg_color=LOG_BG, corner_radius=CORNER_INPUT, height=260)
-        self.log_area.pack(fill="both", expand=True, padx=14, pady=(0, 14))
+        # log card
+        logc = QFrame()
+        logc.setObjectName("card")
+        lv = QVBoxLayout(logc)
+        lv.setContentsMargins(14, 12, 14, 12)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 1000)
+        self.progress.setTextVisible(False)
+        self.progress.setFixedHeight(14)
+        lv.addWidget(self.progress)
+        self.log_box = QPlainTextEdit()
+        self.log_box.setObjectName("log")
+        self.log_box.setReadOnly(True)
+        self.log_box.setMinimumHeight(180)
+        lv.addWidget(self.log_box, 1)
+        lay.addWidget(logc, 1)
 
-        if not ffmpeg_available():
-            self.log(t("log_ffmpeg_missing", self.lang))
+        sc = QScrollArea()
+        sc.setWidgetResizable(True)
+        sc.setWidget(page)
+        wrap = QWidget()
+        wl = QVBoxLayout(wrap)
+        wl.setContentsMargins(16, 14, 8, 12)
+        wl.addWidget(sc)
+        outer.addWidget(wrap, 1)
 
-    def _on_lang_change(self, value):
-        for code, label in LANG_LABELS.items():
-            if label == value:
-                self.lang = code
-                break
-        self.arayuz_ciz()
+        if self._log_cache:
+            self.log_box.setPlainText(self._log_cache)
+        elif not ffmpeg_available():
+            self._append_log(t("log_ffmpeg_missing", lang))
+        self._set_running(self.eng.is_running)
 
-    def _on_theme_change(self, value):
-        self.theme = "dark" if value == t("theme_dark", self.lang) else "light"
-        ctk.set_appearance_mode(self.theme)
+    def _header(self):
+        header = QFrame()
+        header.setObjectName("header")
+        h = QHBoxLayout(header)
+        h.setContentsMargins(20, 12, 20, 12)
+        tv = QVBoxLayout()
+        tv.setSpacing(0)
+        a = QLabel("Preview Smith")
+        a.setObjectName("title")
+        b = QLabel(f"v{APP_VERSION}")
+        b.setObjectName("version")
+        tv.addWidget(a)
+        tv.addWidget(b)
+        h.addLayout(tv)
+        h.addStretch(1)
+        lang = self.eng.lang
+        h.addWidget(self._segmented([LANG_LABELS[c] for c in LANG_CODES], LANG_CODES.index(lang) if lang in LANG_CODES else 0, self._on_lang))
+        h.addSpacing(10)
+        h.addWidget(self._segmented([t("theme_dark", lang), t("theme_light", lang)], 0 if self.eng.theme == "dark" else 1, self._on_theme))
+        return header
 
-    def browse_folder(self):
-        folder = filedialog.askdirectory(title=t("browse_dialog_title", self.lang))
+    def _segmented(self, labels, current, on_click):
+        box = QWidget()
+        h = QHBoxLayout(box)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(0)
+        grp = QButtonGroup(box)
+        grp.setExclusive(True)
+        for i, text in enumerate(labels):
+            b = QPushButton(text)
+            b.setCheckable(True)
+            b.setObjectName("seg")
+            b.setCursor(Qt.PointingHandCursor)
+            b.setChecked(i == current)
+            b.clicked.connect(lambda _=False, idx=i: on_click(idx))
+            grp.addButton(b, i)
+            h.addWidget(b)
+        btns = grp.buttons()
+        btns[0].setObjectName("segL")
+        btns[-1].setObjectName("segR")
+        for b in btns:
+            b.style().unpolish(b)
+            b.style().polish(b)
+        box._grp = grp
+        return box
+
+    def _format_seg(self):
+        return self._segmented(["WebP", "AVIF"], 0 if self.eng.output_format.get() == "webp" else 1,
+                               lambda i: self.eng.output_format.set("webp" if i == 0 else "avif"))
+
+    def _switch(self, text, var):
+        s = Switch(text, lambda: self.eng.theme)
+        s.setChecked(bool(var.get()))
+        s.toggled.connect(var.set)
+        return s
+
+    def _slider_row(self, grid, row, label, var, lo, hi, step=1):
+        grid.addWidget(QLabel(label), row, 0)
+        box = QHBoxLayout()
+        sl = QSlider(Qt.Horizontal)
+        sl.setRange(lo // step, hi // step)
+        sl.setValue(max(lo, min(hi, int(var.get()))) // step)
+        sl.setMinimumWidth(220)
+        val = QLabel(str(int(var.get())))
+        val.setObjectName("value")
+        val.setFixedWidth(40)
+
+        def on(v):
+            var.set(v * step)
+            val.setText(str(v * step))
+        sl.valueChanged.connect(on)
+        box.addWidget(sl, 1)
+        box.addWidget(val)
+        w = QWidget()
+        w.setLayout(box)
+        box.setContentsMargins(0, 0, 0, 0)
+        grid.addWidget(w, row, 1)
+
+    def _on_lang(self, idx):
+        code = LANG_CODES[idx]
+        if code == self.eng.lang:
+            return
+        self.eng.lang = code
+        self.build_ui()
+
+    def _on_theme(self, idx):
+        self.eng.theme = "dark" if idx == 0 else "light"
+        self.apply_theme()
+
+    def _browse(self):
+        folder = QFileDialog.getExistingDirectory(self, t("browse_dialog_title", self.eng.lang), self.folder_edit.text() or "")
         if folder:
-            self.folder_path.set(folder)
-            self._gecmise_ekle(folder)
+            self.folder_edit.setText(folder)
+            self.eng._gecmise_ekle(folder)
 
-    def _gecmise_ekle(self, yol):
-        if not yol:
-            return
-        if yol in self.klasor_gecmisi:
-            self.klasor_gecmisi.remove(yol)
-        self.klasor_gecmisi.insert(0, yol)
-        self.klasor_gecmisi = self.klasor_gecmisi[:12]
+    # ------------------------------------------------------- slots
+    def _append_log(self, msg):
+        self._log_cache += msg + "\n"
+        self.log_box.appendPlainText(msg)
+        sb = self.log_box.verticalScrollBar()
+        sb.setValue(sb.maximum())
 
-    def gecmis_penceresi_ac(self):
-        pencere = ctk.CTkToplevel(self)
-        pencere.title(t("history_window_title", self.lang))
-        pencere.geometry("520x380")
-        pencere.configure(fg_color=BG_MAIN)
-        pencere.transient(self)
-        pencere.attributes("-topmost", True)
-        self._gecmis_pencere_ciz(pencere)
+    def _set_progress(self, frac):
+        self.progress.setValue(int(max(0.0, min(1.0, frac)) * 1000))
 
-    def _gecmis_pencere_ciz(self, pencere):
-        for w in pencere.winfo_children():
-            w.destroy()
+    def _set_running(self, running):
+        lang = self.eng.lang
+        if running:
+            self._log_cache = ""
+            self.log_box.clear()
+            self.btn_start.setText(t("btn_cancel", lang))
+            self.btn_start.setObjectName("cancel")
+        else:
+            self.btn_start.setText(t("btn_start", lang))
+            self.btn_start.setObjectName("start")
+        self.btn_start.style().unpolish(self.btn_start)
+        self.btn_start.style().polish(self.btn_start)
 
-        liste_frame = ctk.CTkScrollableFrame(pencere, fg_color="transparent")
-        liste_frame.pack(fill="both", expand=True, padx=12, pady=12)
+    def closeEvent(self, ev):
+        self.eng.cancel_event.set()
+        self.eng.ayarlari_kaydet(f"{self.width()}x{self.height()}")
+        super().closeEvent(ev)
 
-        if not self.klasor_gecmisi:
-            ctk.CTkLabel(liste_frame, text=t("history_empty", self.lang), text_color=TEXT_MUTED).pack(pady=30)
-            return
 
-        for yol in self.klasor_gecmisi:
-            satir = ctk.CTkFrame(liste_frame, fg_color=CARD_BG, corner_radius=CORNER_INPUT, border_width=1, border_color=BORDER)
-            satir.pack(fill="x", pady=4)
-            ctk.CTkButton(
-                satir, text=yol, anchor="w", fg_color="transparent", hover_color=SIDEBAR_ITEM_HOVER, corner_radius=CORNER_INPUT,
-                command=lambda y=yol, p=pencere: self._gecmisten_sec(y, p),
-            ).pack(side="left", fill="x", expand=True, padx=(6, 0), pady=4)
-            ctk.CTkButton(
-                satir, text="✕", width=32, corner_radius=CORNER_INPUT, fg_color="#b5261a", hover_color="#d63424",
-                command=lambda y=yol, p=pencere: self._gecmisten_sil(y, p),
-            ).pack(side="right", padx=6, pady=4)
-
-    def _gecmisten_sec(self, yol, pencere):
-        self.folder_path.set(yol)
-        self._gecmise_ekle(yol)
-        pencere.destroy()
-
-    def _gecmisten_sil(self, yol, pencere):
-        if yol in self.klasor_gecmisi:
-            self.klasor_gecmisi.remove(yol)
-        self._gecmis_pencere_ciz(pencere)
-
-    # ------------------------------------------------------------------
-    # Settings persistence
-    # ------------------------------------------------------------------
-    def ayarlari_yukle(self):
-        if not os.path.exists(SETTINGS_PATH):
-            return
-        try:
-            with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
-                d = json.load(f)
-            self.lang = d.get("lang", "tr")
-            self.theme = d.get("theme", "dark")
-            self._pending_geometry = d.get("geometry", "750x680")
-            self.folder_path.set(d.get("folder", ""))
-            self.klasor_gecmisi = d.get("recent_folders", [])
-            self.scan_subfolders.set(d.get("scan_subfolders", False))
-            self.delete_source.set(d.get("delete_source", True))
-            self.output_format.set(d.get("output_format", "webp"))
-            self.quality.set(d.get("quality", 60))
-            self.max_size.set(d.get("max_size", 384))
-            self.workers.set(d.get("workers", 3))
-        except Exception:
-            pass
-
-    def kapatirken_kaydet(self):
-        d = {
-            "lang": self.lang,
-            "theme": self.theme,
-            "geometry": self.geometry(),
-            "folder": self.folder_path.get(),
-            "recent_folders": self.klasor_gecmisi,
-            "scan_subfolders": self.scan_subfolders.get(),
-            "delete_source": self.delete_source.get(),
-            "output_format": self.output_format.get(),
-            "quality": self.quality.get(),
-            "max_size": self.max_size.get(),
-            "workers": self.workers.get(),
-        }
-        try:
-            with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
-                json.dump(d, f, indent=4, ensure_ascii=False)
-        except Exception:
-            pass
-        self.destroy()
-
-    # ------------------------------------------------------------------
-    # Logging helpers (thread-safe via .after)
-    # ------------------------------------------------------------------
-    def log(self, message):
-        self.after(0, self._append_log, message)
-
-    def _append_log(self, message):
-        self.log_area.configure(state="normal")
-        self.log_area.insert("end", message + "\n")
-        self.log_area.see("end")
-        self.log_area.configure(state="disabled")
-
-    def set_progress(self, value):
-        self.after(0, self.progress_bar.set, value)
-
-    # ------------------------------------------------------------------
-    # Conversion engine
-    # ------------------------------------------------------------------
-    def start_conversion_thread(self):
-        if self.is_running:
-            self.cancel_event.set()
-            return
-
-        if not self.folder_path.get():
-            self.log(t("log_no_folder", self.lang))
-            return
-        if not ffmpeg_available():
-            self.log(t("log_ffmpeg_missing", self.lang))
-            return
-
-        self.is_running = True
-        self.cancel_event.clear()
-        self.after(0, lambda: self.btn_start.configure(text=t("btn_cancel", self.lang), fg_color="#b5261a", hover_color="#d63424"))
-        self.log_area.configure(state="normal")
-        self.log_area.delete("1.0", "end")
-        self.log_area.configure(state="disabled")
-
-        threading.Thread(target=self.process_files, daemon=True).start()
-
-    def _convert_one(self, video_file: Path, fmt: str, quality: int, max_size: int, delete_source: bool):
-        out_ext = ".webp" if fmt == "webp" else ".avif"
-        out_file = video_file.with_suffix(out_ext)
-
-        scale = f"scale='min({max_size},iw)':'min({max_size},ih)':force_original_aspect_ratio=decrease"
-        if fmt == "webp":
-            cmd = [
-                "ffmpeg", "-y", "-i", str(video_file),
-                "-vf", scale,
-                "-vcodec", "libwebp", "-lossless", "0", "-q:v", str(quality), "-loop", "0",
-                str(out_file),
-            ]
-        else:  # avif
-            cmd = [
-                "ffmpeg", "-y", "-i", str(video_file),
-                "-vf", scale,
-                "-c:v", "libaom-av1", "-crf", str(max(0, 63 - int(quality * 0.6))), "-b:v", "0",
-                str(out_file),
-            ]
-
-        try:
-            kwargs = {}
-            if os.name == "nt":
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                kwargs["startupinfo"] = startupinfo
-
-            result = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
-
-            if result.returncode == 0 and out_file.exists():
-                size_kb = out_file.stat().st_size / 1024
-                if delete_source:
-                    os.remove(video_file)
-                    return True, t("log_converted", self.lang, size=f"{size_kb:.0f} KB")
-                return True, t("log_converted_kept", self.lang, size=f"{size_kb:.0f} KB")
-            return False, t("log_error_kept", self.lang)
-        except Exception as e:
-            return False, t("log_system_error", self.lang, error=str(e))
-
-    def process_files(self):
-        folder = Path(self.folder_path.get())
-        self.log(t("log_scanning", self.lang, folder=str(folder)))
-
-        files = []
-        walker = folder.rglob("*") if self.scan_subfolders.get() else folder.glob("*")
-        for p in walker:
-            if p.is_file() and p.suffix.lower() in VIDEO_EXTENSIONS:
-                files.append(p)
-
-        total_files = len(files)
-        if total_files == 0:
-            self.log(t("log_no_files", self.lang))
-            self.finish_process()
-            return
-
-        self.log(t("log_total_found", self.lang, count=total_files) + "\n" + "=" * 50)
-
-        fmt = self.output_format.get()
-        quality = self.quality.get()
-        max_size = self.max_size.get()
-        delete_source = self.delete_source.get()
-        worker_count = max(1, self.workers.get())
-
-        success_count = 0
-        fail_count = 0
-        done_count = 0
-
-        def task(idx, video_file):
-            if self.cancel_event.is_set():
-                return None
-            self.log(t("log_processing", self.lang, index=idx + 1, total=total_files, name=video_file.name))
-            ok, msg = self._convert_one(video_file, fmt, quality, max_size, delete_source)
-            return ok, msg
-
-        with ThreadPoolExecutor(max_workers=worker_count) as executor:
-            futures = {executor.submit(task, i, f): f for i, f in enumerate(files)}
-            for future in as_completed(futures):
-                if self.cancel_event.is_set():
-                    break
-                result = future.result()
-                if result is None:
-                    continue
-                ok, msg = result
-                self.log(msg)
-                if ok:
-                    success_count += 1
-                else:
-                    fail_count += 1
-                done_count += 1
-                self.set_progress(done_count / total_files)
-
-        if self.cancel_event.is_set():
-            self.log(t("log_cancelled", self.lang))
-
-        self.log("=" * 50)
-        self.log(t("log_summary_title", self.lang))
-        self.log(t("log_summary_success", self.lang, count=success_count))
-        self.log(t("log_summary_fail", self.lang, count=fail_count))
-        self.log(t("log_all_done", self.lang))
-
-        self.finish_process()
-
-    def finish_process(self):
-        self.is_running = False
-        self.after(0, lambda: self.btn_start.configure(text=t("btn_start", self.lang), fg_color="#0b5b7a", hover_color="#157199"))
+def main():
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    win = MainWindow()
+    win.show()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
-    app = PreviewSmithApp()
-    app.mainloop()
+    main()

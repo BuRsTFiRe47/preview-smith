@@ -20,7 +20,8 @@ Forge / WebUI gibi arayüzler, LoRA veya checkpoint kapak dosyası olarak `.mp4`
 - **⚡ Paralel İşlem** — Birden fazla dosyayı aynı anda dönüştürerek (ayarlanabilir işçi sayısı) süreci ciddi ölçüde hızlandırır.
 - **🎛️ Ayarlanabilir Kalite/Boyut** — Çıktı formatı (WebP / AVIF), kalite ve maksimum çözünürlük arayüzden kontrol edilir.
 - **🌐 4 Dil** — Türkçe / English / 日本語 / 中文 arayüz, açılır menü yerine kaydırmalı (segmented) düğmelerle anında değiştirilir.
-- **🎨 Yeni Arayüz** — LoRA Librarian ile aynı mor/pembe degrade vurgulu koyu tema, yuvarlak köşeli kart ve butonlar. Koyu/açık tema tam destekli.
+- **🎨 Yeni Arayüz (Qt / PySide6)** — Windows, macOS ve Linux'ta aynı görünen modern Qt 6 arayüzü: siyah/mavi degrade vurgulu koyu tema, yuvarlak köşeli kartlar, iOS tarzı anahtarlar (LoRA Librarian ile aynı tasarım). Koyu/açık tema tam destekli.
+- **📁 Klasör Geçmişi** — Klasör alanının yanındaki 🕘 simgesiyle son kullanılan klasörler listelenir, her birinin yanında kaldırma (✕) seçeneği vardır.
 - **🌗 Karanlık / Aydınlık Tema** — Varsayılan karanlık temayla açılır, tek tıkla aydınlığa geçer.
 - **💾 Kalıcı Ayarlar** — Dil, tema, pencere boyutu, en son kullanılan klasör ve tüm dönüştürme tercihleri otomatik hatırlanır.
 - **🛑 İptal Desteği** — Devam eden bir dönüştürme işlemini istediğiniz an güvenle durdurabilirsiniz.
@@ -28,7 +29,7 @@ Forge / WebUI gibi arayüzler, LoRA veya checkpoint kapak dosyası olarak `.mp4`
 ### Gereksinimler
 
 - Python 3.10+
-- Sisteminizde kurulu ve PATH'e ekli **ffmpeg** ([ffmpeg.org](https://ffmpeg.org/download.html))
+- Sisteminizde kurulu **ffmpeg** ([ffmpeg.org](https://ffmpeg.org/download.html)) — PATH'te olması ya da uygulamanın yanına konması yeterli; macOS'ta Homebrew (`brew install ffmpeg`) ve Linux'ta paket yöneticisi kurulumları otomatik bulunur.
 - AVIF çıktısı için ffmpeg derlemenizin `libaom-av1` desteği olmalı (çoğu güncel ffmpeg dağıtımında mevcuttur).
 
 ### Kurulum
@@ -40,7 +41,9 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Hazır `.exe` dosyasını indirmek isterseniz, sağdaki **Releases** bölümüne bakabilirsiniz.
+Hazır derlemeleri (**Windows / macOS / Linux**) sağdaki **Releases** bölümünden indirebilirsiniz. Ayarlar Windows'ta uygulamanın yanındaki `ayarlar.json` dosyasında, macOS/Linux'ta kullanıcı yapılandırma klasöründe saklanır.
+
+> 🍎 **macOS:** imzasız uygulamayı ilk açışta *sağ tık → Aç* ile başlatın. 🐧 **Linux:** `PreviewSmith/PreviewSmith` dosyasını çalıştırın (gerekirse `chmod +x`).
 
 > ⚠️ **Windows Defender uyarısı hakkında:** PyInstaller ile derlenen Python programları, kendini geçici klasöre açma davranışı yüzünden bazen Defender tarafından yanlışlıkla "Trojan:Win32/Wacatac.B!ml" olarak işaretlenir — bu, PyInstaller tabanlı binlerce açık kaynak projede görülen bilinen bir yanlış pozitiftir, gerçek bir virüs değildir. Kaynak kodun tamamı bu depoda açık; isterseniz kendiniz derleyebilir ya da [dosyayı VirusTotal'da tarayabilirsiniz](https://www.virustotal.com/).
 
@@ -64,7 +67,8 @@ UIs like Forge / WebUI can't display `.mp4` videos directly as a LoRA or checkpo
 - **⚡ Parallel Processing** — Converts multiple files at once (configurable worker count), significantly speeding up the process.
 - **🎛️ Adjustable Quality/Size** — Output format (WebP / AVIF), quality, and maximum resolution are all controlled from the UI.
 - **🌐 4 Languages** — Turkish / English / 日本語 / 中文 interface, switched instantly with segmented buttons instead of a dropdown menu.
-- **🎨 Redesigned UI** — Same violet-to-pink gradient dark theme as LoRA Librarian, rounded cards and buttons. Full dark/light theme support.
+- **🎨 Redesigned UI (Qt / PySide6)** — A modern Qt 6 interface that looks the same on Windows, macOS and Linux: black/blue gradient dark theme, rounded cards, iOS-style toggles (same design as LoRA Librarian). Full dark/light theme support.
+- **📁 Folder History** — A 🕘 icon next to the folder field lists recently used folders, each with a remove (✕) option.
 - **🌗 Dark / Light Theme** — Opens in dark mode by default, switches to light with a single click.
 - **💾 Persistent Settings** — Language, theme, window size, the last-used folder, and all conversion preferences are remembered automatically.
 - **🛑 Cancel Support** — Safely stop an in-progress conversion at any time.
@@ -72,7 +76,7 @@ UIs like Forge / WebUI can't display `.mp4` videos directly as a LoRA or checkpo
 ### Requirements
 
 - Python 3.10+
-- **ffmpeg** installed and available on your PATH ([ffmpeg.org](https://ffmpeg.org/download.html))
+- **ffmpeg** installed ([ffmpeg.org](https://ffmpeg.org/download.html)) — on your PATH or dropped next to the app; Homebrew (`brew install ffmpeg`) on macOS and package-manager installs on Linux are found automatically.
 - For AVIF output, your ffmpeg build needs `libaom-av1` support (present in most modern ffmpeg distributions).
 
 ### Installation
@@ -84,7 +88,9 @@ pip install -r requirements.txt
 python main.py
 ```
 
-If you'd rather use a ready-made `.exe`, check the **Releases** section on the right.
+Ready-made builds for **Windows / macOS / Linux** are in the **Releases** section on the right. Settings live next to the app in `ayarlar.json` on Windows, and in the per-user config folder on macOS/Linux.
+
+> 🍎 **macOS:** if the app isn't signed, use *right-click → Open* the first time. 🐧 **Linux:** run `PreviewSmith/PreviewSmith` (`chmod +x` if needed).
 
 > ⚠️ **About the Windows Defender warning:** Python programs built with PyInstaller are sometimes flagged by Defender as "Trojan:Win32/Wacatac.B!ml" because of how they self-extract to a temp folder at startup - this is a well-known false positive seen across thousands of PyInstaller-based open-source projects, not an actual virus. The full source is right here in this repo; you're welcome to build it yourself, or [scan the file on VirusTotal](https://www.virustotal.com/).
 

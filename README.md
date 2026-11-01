@@ -20,8 +20,8 @@ Forge / WebUI gibi arayüzler, LoRA veya checkpoint kapak dosyası olarak `.mp4`
 - **⚡ Paralel İşlem** — Birden fazla dosyayı aynı anda dönüştürerek (ayarlanabilir işçi sayısı) süreci ciddi ölçüde hızlandırır.
 - **🎛️ Ayarlanabilir Kalite/Boyut** — Çıktı formatı (WebP / AVIF), kalite ve maksimum çözünürlük arayüzden kontrol edilir.
 - **🌐 4 Dil** — Türkçe / English / 日本語 / 中文 arayüz, açılır menü yerine kaydırmalı (segmented) düğmelerle anında değiştirilir.
-- **🎨 Yeni Arayüz (Qt / PySide6)** — Windows, macOS ve Linux'ta aynı görünen modern Qt 6 arayüzü: siyah/mavi degrade vurgulu koyu tema, yuvarlak köşeli kartlar, iOS tarzı anahtarlar (LoRA Librarian ile aynı tasarım). Koyu/açık tema tam destekli.
-- **📁 Klasör Geçmişi** — Klasör alanının yanındaki 🕘 simgesiyle son kullanılan klasörler listelenir, her birinin yanında kaldırma (✕) seçeneği vardır.
+- **🎨 Yeni Arayüz (Qt / PySide6)** — Windows, macOS ve Linux'ta aynı görünen, KDE Breeze Dark'tan esinli düz ve sakin tasarım: arduvaz zemin, mercan vurgu, ince çerçeveli kartlar, Breeze tarzı onay kutuları ve kaydırıcılar. Koyu/açık tema tam destekli.
+- **📁 Klasör Geçmişi** — Her klasör alanının içindeki ▾ okuna tıklayınca son kullanılan klasörler **açılır liste** olarak gelir; tek tıkla seçilir, yanındaki ✕ ile listeden kaldırılır. Elle yazdığınız klasör de işlem başlatınca geçmişe eklenir.
 - **🌗 Karanlık / Aydınlık Tema** — Varsayılan karanlık temayla açılır, tek tıkla aydınlığa geçer.
 - **💾 Kalıcı Ayarlar** — Dil, tema, pencere boyutu, en son kullanılan klasör ve tüm dönüştürme tercihleri otomatik hatırlanır.
 - **🛑 İptal Desteği** — Devam eden bir dönüştürme işlemini istediğiniz an güvenle durdurabilirsiniz.
@@ -67,8 +67,8 @@ UIs like Forge / WebUI can't display `.mp4` videos directly as a LoRA or checkpo
 - **⚡ Parallel Processing** — Converts multiple files at once (configurable worker count), significantly speeding up the process.
 - **🎛️ Adjustable Quality/Size** — Output format (WebP / AVIF), quality, and maximum resolution are all controlled from the UI.
 - **🌐 4 Languages** — Turkish / English / 日本語 / 中文 interface, switched instantly with segmented buttons instead of a dropdown menu.
-- **🎨 Redesigned UI (Qt / PySide6)** — A modern Qt 6 interface that looks the same on Windows, macOS and Linux: black/blue gradient dark theme, rounded cards, iOS-style toggles (same design as LoRA Librarian). Full dark/light theme support.
-- **📁 Folder History** — A 🕘 icon next to the folder field lists recently used folders, each with a remove (✕) option.
+- **🎨 Redesigned UI (Qt / PySide6)** — A flat, calm design inspired by KDE Breeze Dark that looks the same on Windows, macOS and Linux: slate background, coral accent, thin-bordered cards, Breeze-style checkboxes and sliders. Full dark/light theme support.
+- **📁 Folder History** — Click the ▾ arrow inside any folder field to open a **dropdown** of recently used folders; pick one with a click, or remove it with the ✕ next to it. A folder you typed by hand is added to the history when you start a run.
 - **🌗 Dark / Light Theme** — Opens in dark mode by default, switches to light with a single click.
 - **💾 Persistent Settings** — Language, theme, window size, the last-used folder, and all conversion preferences are remembered automatically.
 - **🛑 Cancel Support** — Safely stop an in-progress conversion at any time.

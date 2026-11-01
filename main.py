@@ -18,198 +18,22 @@ License: MIT
 
 import sys
 
-from PySide6.QtCore import Qt, QObject, Signal, QSize, QRectF
-from PySide6.QtGui import QColor, QPainter, QLinearGradient, QBrush
+from PySide6.QtCore import Qt, QObject, Signal
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QLineEdit, QPushButton, QCheckBox, QSlider, QPlainTextEdit,
-    QProgressBar, QScrollArea, QFrame, QFileDialog, QDialog, QButtonGroup,
+    QLabel, QPushButton, QSlider, QPlainTextEdit,
+    QProgressBar, QScrollArea, QFrame, QButtonGroup,
 )
 
 from lang import t
 from engine import Engine, APP_VERSION, LANG_CODES, LANG_LABELS, ffmpeg_available
-
-ACCENT = "#2f7bff"
-ACCENT_HOVER = "#2569e0"
-GRADIENT_STOPS = ["#050814", "#1e3a8a", "#38bdf8"]
-
-PALETTES = {
-    "dark": {
-        "bg": "#05070c", "header": "#0a0e16", "card": "#0d1119", "hover": "#131a26",
-        "text": "#e6ebf5", "side_text": "#a8b3c4", "border": "#1c2432", "log_bg": "#04060a",
-        "muted": "#7d8aa0", "input": "#0a0e16", "btn_border": "#2a3547",
-    },
-    "light": {
-        "bg": "#f1f4f9", "header": "#ffffff", "card": "#ffffff", "hover": "#dbe3f1",
-        "text": "#16202f", "side_text": "#31435c", "border": "#dde3ee", "log_bg": "#eaeef5",
-        "muted": "#5c6b81", "input": "#ffffff", "btn_border": "#ffffff",
-    },
-}
-
-
-def build_qss(theme):
-    p = PALETTES.get(theme, PALETTES["dark"])
-    return f"""
-    QWidget {{ color: {p['text']}; font-size: 13px; }}
-    QMainWindow, QWidget#root {{ background: {p['bg']}; }}
-    QScrollArea {{ border: none; background: transparent; }}
-    QScrollArea > QWidget > QWidget {{ background: transparent; }}
-    QWidget#page {{ background: transparent; }}
-    QFrame#header {{ background: {p['header']}; border: none; }}
-    QFrame#card {{ background: {p['card']}; border: 1px solid {p['border']}; border-radius: 14px; }}
-    QFrame#card QLabel, QLabel {{ background: transparent; }}
-    QLabel#title {{ font-size: 18px; font-weight: 700; }}
-    QLabel#version {{ color: {p['muted']}; font-size: 11px; }}
-    QLabel#bold {{ font-weight: 700; }}
-    QLabel#value {{ color: {ACCENT}; font-weight: 700; }}
-
-    QLineEdit, QPlainTextEdit {{
-        background: {p['input']}; border: 1px solid {p['border']}; border-radius: 8px; padding: 7px 10px;
-        selection-background-color: {ACCENT}; selection-color: white;
-    }}
-    QLineEdit:focus, QPlainTextEdit:focus {{ border: 1px solid {ACCENT}; }}
-    QPlainTextEdit#log {{
-        background: {p['log_bg']}; color: {ACCENT}; font-family: Consolas, Menlo, "DejaVu Sans Mono", monospace;
-        font-size: 12px;
-    }}
-
-    QPushButton {{
-        background: transparent; border: 1px solid {p['border']}; border-radius: 12px; padding: 7px 14px;
-        color: {p['side_text']};
-    }}
-    QPushButton:hover {{ background: {p['hover']}; }}
-    QPushButton#seg, QPushButton#segL, QPushButton#segR {{ border: 1px solid {p['border']}; border-radius: 0; padding: 6px 12px; color: {p['side_text']}; margin-left: -1px; }}
-    QPushButton#seg:checked, QPushButton#segL:checked, QPushButton#segR:checked {{ background: {ACCENT}; color: white; border: 1px solid {ACCENT}; }}
-    QPushButton#segL {{ border-top-left-radius: 12px; border-bottom-left-radius: 12px; margin-left: 0; }}
-    QPushButton#segR {{ border-top-right-radius: 12px; border-bottom-right-radius: 12px; }}
-    QPushButton#accent {{ background: {ACCENT}; color: white; border: 2px solid {p['btn_border']}; font-weight: 600; }}
-    QPushButton#accent:hover {{ background: {ACCENT_HOVER}; }}
-    QPushButton#start {{
-        background: {ACCENT}; color: white; font-size: 14px; font-weight: 700; border: 2px solid {p['btn_border']};
-        border-radius: 14px; padding: 13px 20px;
-    }}
-    QPushButton#start:hover {{ background: {ACCENT_HOVER}; }}
-    QPushButton#cancel {{
-        background: #b5261a; color: white; font-size: 14px; font-weight: 700; border: 2px solid {p['btn_border']};
-        border-radius: 14px; padding: 13px 20px;
-    }}
-    QPushButton#cancel:hover {{ background: #d63424; }}
-    QPushButton#danger {{ background: #b5261a; color: white; border: none; padding: 5px 10px; }}
-    QPushButton#danger:hover {{ background: #d63424; }}
-    QPushButton#histitem {{ text-align: left; border: none; }}
-
-    QProgressBar {{ background: {p['log_bg']}; border: 1px solid {p['border']}; border-radius: 8px; color: transparent; }}
-    QProgressBar::chunk {{ background: {ACCENT}; border-radius: 7px; }}
-    QSlider::groove:horizontal {{ height: 6px; background: {p['border']}; border-radius: 3px; }}
-    QSlider::sub-page:horizontal {{ background: {ACCENT}; border-radius: 3px; }}
-    QSlider::handle:horizontal {{ background: {ACCENT}; width: 16px; height: 16px; margin: -6px 0; border-radius: 8px; }}
-    QScrollBar:vertical {{ background: transparent; width: 10px; margin: 0; }}
-    QScrollBar::handle:vertical {{ background: {p['border']}; border-radius: 5px; min-height: 30px; }}
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
-    QDialog {{ background: {p['bg']}; }}
-    """
-
-
-class GradientStrip(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setFixedHeight(4)
-
-    def paintEvent(self, _e):
-        g = QLinearGradient(0, 0, self.width(), 0)
-        n = len(GRADIENT_STOPS) - 1
-        for i, c in enumerate(GRADIENT_STOPS):
-            g.setColorAt(i / n, QColor(c))
-        QPainter(self).fillRect(self.rect(), QBrush(g))
-
-
-class Switch(QCheckBox):
-    W, H = 40, 22
-
-    def __init__(self, text="", theme_getter=lambda: "dark"):
-        super().__init__(text)
-        self._theme = theme_getter
-        self.setCursor(Qt.PointingHandCursor)
-        self.setMinimumHeight(30)
-
-    def sizeHint(self):
-        s = super().sizeHint()
-        return QSize(self.W + 12 + self.fontMetrics().horizontalAdvance(self.text()) + 4, max(30, s.height()))
-
-    def hitButton(self, pos):
-        return self.rect().contains(pos)
-
-    def paintEvent(self, _e):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        y = (self.height() - self.H) / 2
-        track = QRectF(1, y, self.W, self.H)
-        on = self.isChecked()
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor(ACCENT) if on else QColor(120, 130, 150, 120))
-        p.drawRoundedRect(track, self.H / 2, self.H / 2)
-        d = self.H - 6
-        x = track.right() - d - 3 if on else track.left() + 3
-        p.setBrush(QColor("white"))
-        p.drawEllipse(QRectF(x, y + 3, d, d))
-        p.setPen(QColor(PALETTES[self._theme()]["text"]))
-        p.drawText(QRectF(self.W + 12, 0, self.width() - self.W - 12, self.height()),
-                   Qt.AlignVCenter | Qt.AlignLeft, self.text())
+from breeze import build_qss, Check, PathField
 
 
 class Bridge(QObject):
     log = Signal(str)
     progress = Signal(float)
     running = Signal(bool)
-
-
-class HistoryDialog(QDialog):
-    def __init__(self, win, edit):
-        super().__init__(win)
-        self.win, self.edit = win, edit
-        self.setWindowTitle(t("history_window_title", win.eng.lang))
-        self.resize(560, 400)
-        self.outer = QVBoxLayout(self)
-        self.outer.setContentsMargins(14, 14, 14, 14)
-        self._fill()
-
-    def _fill(self):
-        while self.outer.count():
-            it = self.outer.takeAt(0)
-            if it.widget():
-                it.widget().deleteLater()
-        eng = self.win.eng
-        if not eng.klasor_gecmisi:
-            lbl = QLabel(t("history_empty", eng.lang))
-            lbl.setAlignment(Qt.AlignCenter)
-            self.outer.addWidget(lbl)
-            return
-        for yol in list(eng.klasor_gecmisi):
-            row = QFrame()
-            row.setObjectName("card")
-            h = QHBoxLayout(row)
-            h.setContentsMargins(6, 4, 6, 4)
-            b = QPushButton(yol)
-            b.setObjectName("histitem")
-            b.setCursor(Qt.PointingHandCursor)
-            b.clicked.connect(lambda _=False, y=yol: self._pick(y))
-            d = QPushButton("✕")
-            d.setObjectName("danger")
-            d.clicked.connect(lambda _=False, y=yol: self._remove(y))
-            h.addWidget(b, 1)
-            h.addWidget(d)
-            self.outer.addWidget(row)
-        self.outer.addStretch(1)
-
-    def _pick(self, yol):
-        self.edit.setText(yol)
-        self.win.eng._gecmise_ekle(yol)
-        self.accept()
-
-    def _remove(self, yol):
-        if yol in self.win.eng.klasor_gecmisi:
-            self.win.eng.klasor_gecmisi.remove(yol)
-        self._fill()
 
 
 class MainWindow(QMainWindow):
@@ -247,7 +71,6 @@ class MainWindow(QMainWindow):
         outer = QVBoxLayout(root)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        outer.addWidget(GradientStrip())
         outer.addWidget(self._header())
 
         page = QWidget()
@@ -264,20 +87,15 @@ class MainWindow(QMainWindow):
         g.setColumnStretch(0, 1)
         lbl = QLabel(t("target_folder_label", lang))
         lbl.setObjectName("bold")
-        g.addWidget(lbl, 0, 0, 1, 3)
-        self.folder_edit = QLineEdit(self.eng.folder_path.get())
-        self.folder_edit.textChanged.connect(self.eng.folder_path.set)
-        hist = QPushButton("🕘")
-        hist.setFixedWidth(40)
-        hist.setCursor(Qt.PointingHandCursor)
-        hist.clicked.connect(lambda: HistoryDialog(self, self.folder_edit).exec())
-        browse = QPushButton(t("browse", lang))
-        browse.setObjectName("accent")
-        browse.setCursor(Qt.PointingHandCursor)
-        browse.clicked.connect(self._browse)
-        g.addWidget(self.folder_edit, 1, 0)
-        g.addWidget(hist, 1, 1)
-        g.addWidget(browse, 1, 2)
+        g.addWidget(lbl, 0, 0)
+        eng = self.eng
+        self.path_field = PathField(
+            eng.folder_path.get(), eng.folder_path.set, lambda: eng.klasor_gecmisi, eng._gecmise_ekle,
+            lambda p: eng.klasor_gecmisi.remove(p) if p in eng.klasor_gecmisi else None,
+            t("browse", lang), t("history_window_title", lang), t("history_empty", lang),
+            t("browse_dialog_title", lang),
+        )
+        g.addWidget(self.path_field, 1, 0)
         lay.addWidget(card)
 
         # options card
@@ -302,8 +120,9 @@ class MainWindow(QMainWindow):
 
         self.btn_start = QPushButton(t("btn_start", lang))
         self.btn_start.setObjectName("start")
+        self.btn_start.setProperty("role", "action")
         self.btn_start.setCursor(Qt.PointingHandCursor)
-        self.btn_start.clicked.connect(self.eng.start_conversion_thread)
+        self.btn_start.clicked.connect(self._start)
         lay.addWidget(self.btn_start)
 
         # log card
@@ -389,7 +208,7 @@ class MainWindow(QMainWindow):
                                lambda i: self.eng.output_format.set("webp" if i == 0 else "avif"))
 
     def _switch(self, text, var):
-        s = Switch(text, lambda: self.eng.theme)
+        s = Check(text)
         s.setChecked(bool(var.get()))
         s.toggled.connect(var.set)
         return s
@@ -416,6 +235,14 @@ class MainWindow(QMainWindow):
         box.setContentsMargins(0, 0, 0, 0)
         grid.addWidget(w, row, 1)
 
+    def _start(self):
+        """Remember the typed folder too, then start / cancel."""
+        import os
+        p = self.path_field.text().strip()
+        if p and os.path.isdir(p) and not self.eng.is_running:
+            self.eng._gecmise_ekle(p)
+        self.eng.start_conversion_thread()
+
     def _on_lang(self, idx):
         code = LANG_CODES[idx]
         if code == self.eng.lang:
@@ -426,12 +253,6 @@ class MainWindow(QMainWindow):
     def _on_theme(self, idx):
         self.eng.theme = "dark" if idx == 0 else "light"
         self.apply_theme()
-
-    def _browse(self):
-        folder = QFileDialog.getExistingDirectory(self, t("browse_dialog_title", self.eng.lang), self.folder_edit.text() or "")
-        if folder:
-            self.folder_edit.setText(folder)
-            self.eng._gecmise_ekle(folder)
 
     # ------------------------------------------------------- slots
     def _append_log(self, msg):

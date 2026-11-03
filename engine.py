@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from lang import t
 
-APP_VERSION = "2.2.0"
+APP_VERSION = "2.2.1"
 VIDEO_EXTENSIONS = (".mp4", ".mov", ".webm", ".mkv")
 
 LANG_CODES = ["tr", "en", "ja", "zh"]

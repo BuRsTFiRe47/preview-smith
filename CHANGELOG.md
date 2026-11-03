@@ -2,6 +2,9 @@
 
 ## 🇹🇷 Türkçe
 
+### 🎨 v2.2.1 — Tema ayarı
+- Koyu tema zemin rengi `#181826`; vurgu (buton) rengi daha koyu ve kırmızıya yakın bir tona çekildi (karanlıkta göz almasın diye).
+
 ### 🎨 v2.2.0 — KDE Breeze Dark esinli yeni tasarım + klasör geçmişi açılır liste
 - Arayüz, paylaşılan görsel (KDE "Application Style" ekranı) ölçülerek yeniden tasarlandı: arduvaz zemin `#2c3746`, kontrol yüzeyi `#323e4f`, ince çerçeve `#606974`, mercan vurgu `#f77067`; düz ve sakin görünüm, gradient şerit kaldırıldı.
 - Kenar çubuğunda tam genişlikte düz mercan "seçili" satır; renkli emoji'ler menüden kaldırıldı (tek renkli, sade görünüm).
@@ -18,6 +21,9 @@
 - Dönüştürme başlarken log temizleniyor, bitince buton otomatik "Başlat"a dönüyor.
 
 ## 🇬🇧 English
+
+### 🎨 v2.2.1 — Theme tweak
+- Dark theme background is now `#181826`; the accent (button) colour is darker and redder so it isn't glaring in the dark.
 
 ### 🎨 v2.2.0 — KDE Breeze Dark-inspired redesign + folder history dropdown
 - The UI was redesigned from a shared reference screenshot (KDE "Application Style" page) using measured colours: slate background `#2c3746`, control surface `#323e4f`, thin border `#606974`, coral accent `#f77067`; a flat, calm look, gradient strip removed.
